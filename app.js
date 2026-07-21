@@ -188,6 +188,6 @@ function closeSplash(){
 const splashStarted=performance.now();
 window.addEventListener("load",()=>{
   const elapsed=performance.now()-splashStarted;
-  setTimeout(closeSplash,Math.max(0,2000-elapsed));
+  setTimeout(closeSplash,Math.max(0,3000-elapsed));
 });
 setTimeout(closeSplash,2600);
