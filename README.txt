@@ -1,24 +1,20 @@
-MANUELITO CONTENT PWA — VERSIÓN 2
+MANUELITO STUDIO — ACTUALIZACIÓN SEGURA
 
-CAMBIOS PRINCIPALES
-- Nueva identidad azul y celeste.
-- Videos disponibles calculados automáticamente.
-- Se eliminó “Seleccionados”.
-- Se agregó contador de pendientes.
-- Títulos, notas y estados editables.
-- Estados: Idea, Grabado, Editado, Listo y Publicado.
-- Orden de videos editable.
-- Creación y administración de series.
-- Historial de series.
-- Rutina semanal editable.
-- Siempre muestra las cuatro próximas tareas reales.
-- Exportación de las próximas tareas al calendario.
+Esta versión conserva la clave localStorage de la V2:
+manuelito-content-v2
 
-INSTALACIÓN
-1. Sube todos los archivos a un hosting HTTPS.
-2. Abre la URL desde el teléfono.
-3. Android/Chrome: “Instalar app”.
-4. iPhone/Safari: Compartir > Agregar a pantalla de inicio.
+Para conservar tus textos y cambios del celular:
+1. Reemplaza los archivos en el mismo dominio y la misma ruta de la V2.
+2. No borres datos del navegador ni desinstales la PWA antes de actualizar.
+3. Abre la app con internet y recarga una vez.
+4. Cierra y vuelve a abrir si aún ves la versión anterior.
 
-NOTA
-Esta versión guarda datos localmente en el dispositivo. Para sincronizar con varios equipos o leer una carpeta externa automáticamente, se requerirá una integración posterior con almacenamiento en la nube o permisos de carpeta compatibles.
+Incluye:
+- Inicio compacto.
+- Navegación inferior.
+- Series.
+- Biblioteca de videos sin flechas.
+- Calendario.
+- Ajustes.
+- Idea rápida.
+- Exportar e importar respaldo JSON.

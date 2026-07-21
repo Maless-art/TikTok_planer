@@ -1,389 +1,56 @@
+const STORAGE_KEY="manuelito-content-v2"; // Misma clave de V2: conserva los cambios del celular
+const VERSION=3;
+const labels={idea:"Idea",recorded:"Grabado",edited:"Editado",ready:"Listo",published:"Publicado"};
 
-const STORAGE_KEY = "manuelito-content-v2";
+function defaultState(){const id=crypto.randomUUID();return{schemaVersion:VERSION,activeSeriesId:id,series:[{id,name:"1 año en la vida de Manuelito",description:"Un recorrido por los momentos más importantes del año en que el canal estuvo ausente.",videos:[]}],routine:[],streak:0,notifications:false};}
+function migrate(s){if(!s||typeof s!=="object")return defaultState();s.schemaVersion=VERSION;s.series=Array.isArray(s.series)?s.series:defaultState().series;s.routine=Array.isArray(s.routine)?s.routine:[];s.streak=Number(s.streak||0);s.series.forEach(x=>{x.videos=Array.isArray(x.videos)?x.videos:[];x.videos.forEach((v,i)=>{v.id=v.id||crypto.randomUUID();v.title=v.title||`Video ${i+1}`;v.status=v.status||"idea";v.notes=v.notes||"";v.order=Number(v.order||i+1);});});s.activeSeriesId=s.activeSeriesId||s.series[0]?.id;return s;}
+function load(){try{const x=localStorage.getItem(STORAGE_KEY);return x?migrate(JSON.parse(x)):defaultState();}catch{return defaultState();}}
+let state=load();
+const $=id=>document.getElementById(id);
+function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));render();}
+function series(){return state.series.find(x=>x.id===state.activeSeriesId)||state.series[0];}
+function esc(s=""){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));}
+function normalize(v){v.sort((a,b)=>a.order-b.order).forEach((x,i)=>x.order=i+1);}
+function nextDate(item,from=new Date()){const d=new Date(from),diff=(Number(item.day)-from.getDay()+7)%7;d.setDate(from.getDate()+diff);d.setHours(Number(item.hour),Number(item.minute),0,0);if(d<=from)d.setDate(d.getDate()+7);return d;}
+function schedule(n=8){const now=new Date(),a=[];state.routine.forEach(i=>{let d=nextDate(i,now);for(let k=0;k<6;k++){a.push({...i,date:new Date(d)});d.setDate(d.getDate()+7);}});return a.sort((x,y)=>x.date-y.date).slice(0,n);}
+function fmt(d){return new Intl.DateTimeFormat("es-PA",{weekday:"long",day:"numeric",month:"long",hour:"numeric",minute:"2-digit"}).format(d);}
 
-const initialVideos = [
-  "El regreso: un año después",
-  "Así era Manuelito cuando nos despedimos",
-  "Sus primeras palabras favoritas",
-  "Descubriendo los colores",
-  "Sus ocurrencias más graciosas",
-  "Aprendiendo español e inglés",
-  "Jugando con papá",
-  "Un momento especial con mamá",
-  "Su cumpleaños y cuánto creció",
-  "La etapa de las preguntas",
-  "Las frases que ya puede decir",
-  "Así está Manuelito hoy"
-].map((title, index) => ({
-  id: crypto.randomUUID(),
-  title,
-  status: index === 0 ? "published" : "idea",
-  notes: "",
-  order: index + 1
-}));
+function render(){
+ const s=series(); if(!s)return; normalize(s.videos);
+ const total=s.videos.length,pub=s.videos.filter(v=>v.status==="published").length,pend=total-pub,pct=total?Math.round(pub/total*100):0;
+ $("availableCount").textContent=total;$("pendingCount").textContent=pend;$("publishedCount").textContent=pub;$("streakCount").textContent=state.streak;
+ $("currentSeriesName").textContent=s.name;$("seriesDescription").textContent=s.description||"Sin descripción.";
+ $("progressBar").style.width=pct+"%";$("progressText").textContent=`${pub} / ${total} publicados`;$("remainingText").textContent=`${pend} pendientes`;
+ $("progressRing").style.setProperty("--pct",pct);$("ringText").textContent=pct+"%";
+ const next=s.videos.find(v=>v.status!=="published"),task=schedule(20).find(t=>(t.type||"").toLowerCase().includes("public"))||schedule(1)[0];
+ $("nextTitle").textContent=next?next.title:"Serie completada";$("nextDate").textContent=next&&task?fmt(task.date):"Ya puedes crear una nueva serie.";
+ renderTasks();renderSeries();renderVideos();renderCalendar();countdown();
+}
+function renderTasks(){const e=$("scheduleList");e.innerHTML="";schedule(4).forEach(i=>{const r=document.createElement("div");r.className="task";r.innerHTML=`<div class="taskdate">${i.date.toLocaleDateString("es-PA",{weekday:"short"}).replace(".","")}<span>${i.date.toLocaleTimeString("es-PA",{hour:"numeric",minute:"2-digit"})}</span></div><div><h3>${esc(i.title)}</h3><p>${esc(i.type||"Tarea")}</p></div>`;e.appendChild(r);});if(!state.routine.length)e.innerHTML='<p class="muted">Aún no hay tareas en la rutina.</p>';}
+function renderSeries(){const e=$("seriesCards");e.innerHTML="";state.series.forEach(s=>{const pub=s.videos.filter(v=>v.status==="published").length,total=s.videos.length,pct=total?Math.round(pub/total*100):0,c=document.createElement("article");c.className="seriescard "+(s.id===state.activeSeriesId?"active":"");c.innerHTML=`<h3>${esc(s.name)}</h3><p class="meta">${esc(s.description||"Sin descripción")}</p><div class="bar"><div style="width:${pct}%"></div></div><p class="meta">${pub}/${total} publicados</p><div class="rowactions"><button class="activate">${s.id===state.activeSeriesId?"Serie actual":"Activar"}</button></div>`;c.querySelector(".activate").onclick=()=>{state.activeSeriesId=s.id;save();};e.appendChild(c);});}
+function renderVideos(){const s=series(),f=$("filterSelect").value,e=$("videoList");e.innerHTML="";s.videos.filter(v=>f==="all"||v.status===f).forEach(v=>{const c=document.createElement("article");c.className="videocard";c.innerHTML=`<h3>${esc(v.title)}</h3><p class="meta">${esc(v.notes||"Sin notas")}</p><div class="rowactions"><select class="status">${Object.entries(labels).map(([k,l])=>`<option value="${k}" ${v.status===k?"selected":""}>${l}</option>`).join("")}</select><button class="edit secondary">Editar</button><button class="delete secondary">Eliminar</button></div>`;c.querySelector(".status").onchange=x=>{const was=v.status==="published";v.status=x.target.value;if(!was&&v.status==="published")state.streak++;if(was&&v.status!=="published")state.streak=Math.max(0,state.streak-1);save();};c.querySelector(".edit").onclick=()=>openVideo(v);c.querySelector(".delete").onclick=()=>{if(confirm("¿Eliminar este video?")){s.videos=s.videos.filter(x=>x.id!==v.id);save();}};e.appendChild(c);});if(!s.videos.length)e.innerHTML='<p class="muted">Esta serie todavía no tiene videos.</p>';}
+function renderCalendar(){const e=$("calendarList");e.innerHTML="";schedule(12).forEach(i=>{const c=document.createElement("article");c.className="calendarcard";c.innerHTML=`<div class="calday">${i.date.toLocaleDateString("es-PA",{day:"2-digit"})}<span>${i.date.toLocaleDateString("es-PA",{month:"short"})}</span></div><div><strong>${esc(i.title)}</strong><p class="meta">${fmt(i.date)}</p></div>`;e.appendChild(c);});}
+function countdown(){const n=schedule(1)[0],e=$("countdown");if(!n){e.textContent="Configura tu rutina semanal.";return;}const ms=n.date-new Date(),d=Math.floor(ms/86400000),h=Math.floor(ms%86400000/3600000),m=Math.floor(ms%3600000/60000);e.textContent=d?`Faltan ${d} días, ${h} horas y ${m} minutos`:`Faltan ${h} horas y ${m} minutos`;}
+function openVideo(v=null){$("videoDialogTitle").textContent=v?"Editar video":"Agregar video";$("editingVideoId").value=v?.id||"";$("videoTitleInput").value=v?.title||"";$("videoStatusInput").value=v?.status||"idea";$("videoNotesInput").value=v?.notes||"";$("videoDialog").showModal();}
+function routineEditor(){const e=$("routineEditor");e.innerHTML="";state.routine.forEach(i=>{const r=document.createElement("div");r.className="routine";r.dataset.id=i.id;r.innerHTML=`<select class="day">${["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"].map((d,k)=>`<option value="${k}" ${k==i.day?"selected":""}>${d}</option>`).join("")}</select><input class="hour" type="number" min="0" max="23" value="${i.hour}"><input class="minute" type="number" min="0" max="59" value="${i.minute}"><input class="title wide" value="${esc(i.title)}"><button type="button" class="secondary remove">Eliminar</button>`;r.querySelector(".remove").onclick=()=>r.remove();e.appendChild(r);});}
+function collectRoutine(){state.routine=[...document.querySelectorAll(".routine")].map(r=>({id:r.dataset.id||crypto.randomUUID(),day:Number(r.querySelector(".day").value),hour:Number(r.querySelector(".hour").value),minute:Number(r.querySelector(".minute").value),title:r.querySelector(".title").value.trim()||"Tarea de contenido",type:r.querySelector(".title").value.toLowerCase().includes("public")?"Publicación":"Preparación"}));}
+function downloadICS(items){const pad=n=>String(n).padStart(2,"0"),stamp=d=>`${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;let c="BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Manuelito Studio//ES\r\n";items.forEach(i=>{const end=new Date(i.date.getTime()+1800000);c+=`BEGIN:VEVENT\r\nUID:${crypto.randomUUID()}@manuelito-studio\r\nDTSTART:${stamp(i.date)}\r\nDTEND:${stamp(end)}\r\nSUMMARY:${i.title}\r\nBEGIN:VALARM\r\nTRIGGER:-PT30M\r\nACTION:DISPLAY\r\nDESCRIPTION:Recordatorio de contenido\r\nEND:VALARM\r\nEND:VEVENT\r\n`;});c+="END:VCALENDAR";const b=new Blob([c],{type:"text/calendar"}),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="agenda-manuelito.ics";a.click();URL.revokeObjectURL(u);}
 
-const defaultRoutine = [
-  { id: crypto.randomUUID(), day: 1, hour: 19, minute: 30, title: "Publicar episodio de la serie", type: "Publicación" },
-  { id: crypto.randomUUID(), day: 3, hour: 19, minute: 30, title: "Publicar episodio de la serie", type: "Publicación" },
-  { id: crypto.randomUUID(), day: 6, hour: 9, minute: 0, title: "Publicar episodio de la serie", type: "Publicación" },
-  { id: crypto.randomUUID(), day: 0, hour: 19, minute: 0, title: "Preparar contenido de la semana", type: "Preparación" }
-];
-
-function defaultState() {
-  const seriesId = crypto.randomUUID();
-  return {
-    activeSeriesId: seriesId,
-    series: [{
-      id: seriesId,
-      name: "1 año en la vida de Manuelito",
-      description: "Un recorrido por los momentos más importantes del año en que el canal estuvo ausente.",
-      createdAt: new Date().toISOString(),
-      completedAt: null,
-      videos: initialVideos
-    }],
-    routine: defaultRoutine,
-    streak: 1,
-    notifications: false
-  };
-}
-
-function loadState() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  return raw ? JSON.parse(raw) : defaultState();
-}
-let state = loadState();
-
-const statusLabels = {
-  idea: "Idea",
-  recorded: "Grabado",
-  edited: "Editado",
-  ready: "Listo",
-  published: "Publicado"
-};
-
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  render();
-}
-function activeSeries() {
-  return state.series.find(s => s.id === state.activeSeriesId) || state.series[0];
-}
-function nextOccurrence(item, from = new Date()) {
-  const d = new Date(from);
-  const diff = (item.day - from.getDay() + 7) % 7;
-  d.setDate(from.getDate() + diff);
-  d.setHours(item.hour, item.minute, 0, 0);
-  if (d <= from) d.setDate(d.getDate() + 7);
-  return d;
-}
-function getUpcomingSchedule(count = 4) {
-  const now = new Date();
-  const events = [];
-  state.routine.forEach(item => {
-    let date = nextOccurrence(item, now);
-    for (let i=0; i<4; i++) {
-      events.push({...item, date:new Date(date)});
-      date.setDate(date.getDate()+7);
-    }
-  });
-  return events.sort((a,b)=>a.date-b.date).slice(0,count);
-}
-function formatDate(d) {
-  return new Intl.DateTimeFormat("es-PA", {
-    weekday:"long", day:"numeric", month:"long", hour:"numeric", minute:"2-digit"
-  }).format(d);
-}
-function render() {
-  const series = activeSeries();
-  const total = series.videos.length;
-  const published = series.videos.filter(v => v.status === "published").length;
-  const pending = total - published;
-  document.getElementById("availableCount").textContent = total;
-  document.getElementById("pendingCount").textContent = pending;
-  document.getElementById("publishedCount").textContent = published;
-  document.getElementById("streakCount").textContent = state.streak;
-
-  document.getElementById("currentSeriesName").textContent = series.name;
-  document.getElementById("seriesDescription").textContent = series.description || "Sin descripción.";
-  const pct = total ? Math.round((published/total)*100) : 0;
-  document.getElementById("progressBar").style.width = pct + "%";
-  document.getElementById("progressText").textContent = `${published} de ${total} publicaciones completadas`;
-  const complete = total > 0 && published === total;
-  document.getElementById("seriesCompleteActions").classList.toggle("hidden", !complete);
-
-  const nextVideo = series.videos.filter(v => v.status !== "published").sort((a,b)=>a.order-b.order)[0];
-  const nextTask = getUpcomingSchedule(20).find(t => t.type.toLowerCase().includes("public")) || getUpcomingSchedule(1)[0];
-  document.getElementById("nextTitle").textContent = nextVideo ? nextVideo.title : "Serie completada";
-  document.getElementById("nextDate").textContent = nextVideo && nextTask ? formatDate(nextTask.date) : "¡Llegaste al final de esta serie!";
-  document.getElementById("nextStatus").textContent = nextVideo ? statusLabels[nextVideo.status] : "Completado";
-  document.getElementById("nextStatus").className = "pill " + (nextVideo ? "pending" : "published");
-
-  renderSchedule();
-  renderVideos();
-  renderSeriesList();
-  updateCountdown();
-}
-function renderSchedule() {
-  const list = document.getElementById("scheduleList");
-  list.innerHTML = "";
-  getUpcomingSchedule(4).forEach(item => {
-    const div = document.createElement("div");
-    div.className = "schedule-item";
-    div.innerHTML = `
-      <div class="daybox">
-        <strong>${item.date.toLocaleDateString("es-PA",{weekday:"short"}).replace(".","")}</strong>
-        <span>${item.date.toLocaleTimeString("es-PA",{hour:"numeric",minute:"2-digit"})}</span>
-      </div>
-      <div>
-        <h3>${escapeHtml(item.title)}</h3>
-        <p>${escapeHtml(item.type)} · ${item.date.toLocaleDateString("es-PA",{day:"numeric",month:"short"})}</p>
-      </div>
-      <button class="secondary small">Agregar al calendario</button>
-    `;
-    div.querySelector("button").onclick = () => downloadICS([item]);
-    list.appendChild(div);
-  });
-}
-function renderVideos() {
-  const series = activeSeries();
-  const filter = document.getElementById("filterSelect").value;
-  const list = document.getElementById("videoList");
-  list.innerHTML = "";
-  series.videos
-    .filter(v => filter === "all" || v.status === filter || (filter === "pending" && v.status !== "published"))
-    .sort((a,b)=>a.order-b.order)
-    .forEach(video => {
-      const div = document.createElement("div");
-      div.className = "video-item";
-      div.innerHTML = `
-        <div>
-          <h3>${video.order}. ${escapeHtml(video.title)}</h3>
-          <p>${statusLabels[video.status]}${video.notes ? " · " + escapeHtml(video.notes) : ""}</p>
-        </div>
-        <div class="video-actions">
-          <select class="status-select">
-            ${Object.entries(statusLabels).map(([value,label])=>`<option value="${value}" ${video.status===value?"selected":""}>${label}</option>`).join("")}
-          </select>
-          <button class="icon-btn edit-btn">Editar</button>
-          <button class="icon-btn up-btn">↑</button>
-          <button class="icon-btn down-btn">↓</button>
-          <button class="icon-btn delete-btn">×</button>
-        </div>
-      `;
-      div.querySelector(".status-select").onchange = e => {
-        const wasPublished = video.status === "published";
-        video.status = e.target.value;
-        if (!wasPublished && video.status === "published") state.streak += 1;
-        if (wasPublished && video.status !== "published") state.streak = Math.max(0,state.streak-1);
-        saveState();
-      };
-      div.querySelector(".edit-btn").onclick = () => openVideoDialog(video);
-      div.querySelector(".up-btn").onclick = () => moveVideo(video.id,-1);
-      div.querySelector(".down-btn").onclick = () => moveVideo(video.id,1);
-      div.querySelector(".delete-btn").onclick = () => {
-        if (confirm("¿Eliminar este video?")) {
-          series.videos = series.videos.filter(v=>v.id!==video.id);
-          normalizeOrder(series.videos);
-          saveState();
-        }
-      };
-      list.appendChild(div);
-    });
-}
-function normalizeOrder(videos) {
-  videos.sort((a,b)=>a.order-b.order).forEach((v,i)=>v.order=i+1);
-}
-function moveVideo(id, direction) {
-  const videos = activeSeries().videos.sort((a,b)=>a.order-b.order);
-  const index = videos.findIndex(v=>v.id===id);
-  const target = index + direction;
-  if (target < 0 || target >= videos.length) return;
-  [videos[index].order, videos[target].order] = [videos[target].order, videos[index].order];
-  saveState();
-}
-function renderSeriesList() {
-  const list = document.getElementById("seriesList");
-  if (!list) return;
-  list.innerHTML = "";
-  state.series.forEach(series => {
-    const published = series.videos.filter(v=>v.status==="published").length;
-    const div = document.createElement("div");
-    div.className = "series-item " + (series.id===state.activeSeriesId ? "active" : "");
-    div.innerHTML = `
-      <div>
-        <strong>${escapeHtml(series.name)}</strong>
-        <p class="muted">${published} de ${series.videos.length} publicados</p>
-      </div>
-      <button type="button" class="secondary small">${series.id===state.activeSeriesId ? "Actual" : "Activar"}</button>
-    `;
-    div.querySelector("button").onclick = () => { state.activeSeriesId = series.id; saveState(); };
-    list.appendChild(div);
-  });
-}
-function openVideoDialog(video=null) {
-  document.getElementById("videoDialogTitle").textContent = video ? "Editar video" : "Agregar video";
-  document.getElementById("editingVideoId").value = video?.id || "";
-  document.getElementById("videoTitleInput").value = video?.title || "";
-  document.getElementById("videoStatusInput").value = video?.status || "idea";
-  document.getElementById("videoNotesInput").value = video?.notes || "";
-  document.getElementById("videoDialog").showModal();
-}
-function saveVideo() {
-  const series = activeSeries();
-  const id = document.getElementById("editingVideoId").value;
-  const title = document.getElementById("videoTitleInput").value.trim();
-  if (!title) return;
-  if (id) {
-    const video = series.videos.find(v=>v.id===id);
-    video.title = title;
-    video.status = document.getElementById("videoStatusInput").value;
-    video.notes = document.getElementById("videoNotesInput").value.trim();
-  } else {
-    series.videos.push({
-      id:crypto.randomUUID(),
-      title,
-      status:document.getElementById("videoStatusInput").value,
-      notes:document.getElementById("videoNotesInput").value.trim(),
-      order:series.videos.length+1
-    });
-  }
-  saveState();
-}
-function renderRoutineEditor() {
-  const editor = document.getElementById("routineEditor");
-  editor.innerHTML = "";
-  state.routine.forEach(item => {
-    const row = document.createElement("div");
-    row.className = "routine-row";
-    row.dataset.id = item.id;
-    row.innerHTML = `
-      <select class="day">
-        ${["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"].map((d,i)=>`<option value="${i}" ${i===item.day?"selected":""}>${d}</option>`).join("")}
-      </select>
-      <input class="hour" type="number" min="0" max="23" value="${item.hour}">
-      <input class="minute" type="number" min="0" max="59" step="5" value="${item.minute}">
-      <input class="title wide" value="${escapeHtml(item.title)}">
-      <button type="button" class="secondary remove">Eliminar</button>
-    `;
-    row.querySelector(".remove").onclick = () => row.remove();
-    editor.appendChild(row);
-  });
-}
-function collectRoutine() {
-  const rows = [...document.querySelectorAll(".routine-row")];
-  state.routine = rows.map(row => ({
-    id: row.dataset.id || crypto.randomUUID(),
-    day: Number(row.querySelector(".day").value),
-    hour: Number(row.querySelector(".hour").value),
-    minute: Number(row.querySelector(".minute").value),
-    title: row.querySelector(".title").value.trim() || "Tarea de contenido",
-    type: row.querySelector(".title").value.toLowerCase().includes("public") ? "Publicación" : "Preparación"
-  }));
-}
-function updateCountdown() {
-  const next = getUpcomingSchedule(1)[0];
-  if (!next) {
-    document.getElementById("countdown").textContent = "No hay tareas programadas.";
-    return;
-  }
-  const ms = next.date - new Date();
-  const days = Math.floor(ms / 86400000);
-  const hours = Math.floor((ms % 86400000) / 3600000);
-  const mins = Math.floor((ms % 3600000) / 60000);
-  document.getElementById("countdown").textContent = days>0 ?
-    `Faltan ${days} días, ${hours} horas y ${mins} minutos` :
-    `Faltan ${hours} horas y ${mins} minutos`;
-}
-function escapeHtml(str="") {
-  return String(str).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-}
-function downloadICS(items) {
-  const pad=n=>String(n).padStart(2,"0");
-  const stamp=d=>`${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
-  let content="BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Manuelito Content//ES\r\n";
-  items.forEach(item=>{
-    const end=new Date(item.date.getTime()+30*60000);
-    content+=`BEGIN:VEVENT\r\nUID:${crypto.randomUUID()}@manuelito-content\r\nDTSTART:${stamp(item.date)}\r\nDTEND:${stamp(end)}\r\nSUMMARY:${item.title}\r\nDESCRIPTION:Agenda de contenido de Manuelito\r\nBEGIN:VALARM\r\nTRIGGER:-PT30M\r\nACTION:DISPLAY\r\nDESCRIPTION:Recordatorio de contenido\r\nEND:VALARM\r\nEND:VEVENT\r\n`;
-  });
-  content+="END:VCALENDAR";
-  const blob=new Blob([content],{type:"text/calendar"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");
-  a.href=url;a.download="agenda-manuelito.ics";a.click();
-  URL.revokeObjectURL(url);
-}
-
-document.getElementById("markPublishedBtn").onclick = () => {
-  const video = activeSeries().videos.filter(v=>v.status!=="published").sort((a,b)=>a.order-b.order)[0];
-  if (!video) return alert("No quedan videos pendientes.");
-  video.status = "published";
-  state.streak += 1;
-  saveState();
-};
-document.getElementById("notifyBtn").onclick = async () => {
-  if (!("Notification" in window)) return alert("Este navegador no permite notificaciones.");
-  const permission = await Notification.requestPermission();
-  state.notifications = permission==="granted";
-  saveState();
-  if (permission==="granted") new Notification("Manuelito Content",{body:"Avisos activados. Exporta también la rutina al calendario.",icon:"icon-192.png"});
-};
-document.getElementById("filterSelect").onchange = renderVideos;
-document.getElementById("addVideoBtn").onclick = () => openVideoDialog();
-document.getElementById("videoForm").addEventListener("submit", saveVideo);
-document.getElementById("seriesMenuBtn").onclick = () => { renderSeriesList(); document.getElementById("seriesDialog").showModal(); };
-document.getElementById("newSeriesBtn").onclick = () => document.getElementById("seriesDialog").showModal();
-document.getElementById("viewHistoryBtn").onclick = () => document.getElementById("seriesDialog").showModal();
-document.getElementById("seriesForm").addEventListener("submit", e => {
-  const name = document.getElementById("seriesNameInput").value.trim();
-  if (!name) return;
-  const id = crypto.randomUUID();
-  state.series.push({
-    id,
-    name,
-    description:document.getElementById("seriesDescriptionInput").value.trim(),
-    createdAt:new Date().toISOString(),
-    completedAt:null,
-    videos:[]
-  });
-  state.activeSeriesId = id;
-  document.getElementById("seriesNameInput").value="";
-  document.getElementById("seriesDescriptionInput").value="";
-  saveState();
-});
-document.getElementById("editRoutineBtn").onclick = () => {
-  renderRoutineEditor();
-  document.getElementById("routineDialog").showModal();
-};
-document.getElementById("addRoutineItemBtn").onclick = () => {
-  const editor = document.getElementById("routineEditor");
-  const row = document.createElement("div");
-  row.className="routine-row";
-  row.dataset.id=crypto.randomUUID();
-  row.innerHTML=`
-    <select class="day">${["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"].map((d,i)=>`<option value="${i}">${d}</option>`).join("")}</select>
-    <input class="hour" type="number" min="0" max="23" value="19">
-    <input class="minute" type="number" min="0" max="59" step="5" value="0">
-    <input class="title wide" value="Publicar episodio de la serie">
-    <button type="button" class="secondary remove">Eliminar</button>`;
-  row.querySelector(".remove").onclick=()=>row.remove();
-  editor.appendChild(row);
-};
-document.getElementById("routineForm").addEventListener("submit", () => {
-  collectRoutine();
-  saveState();
-});
-document.getElementById("exportCalendarBtn").onclick = () => downloadICS(getUpcomingSchedule(12));
-
-let deferredPrompt;
-window.addEventListener("beforeinstallprompt",e=>{
-  e.preventDefault(); deferredPrompt=e;
-  document.getElementById("installBtn").classList.remove("hidden");
-});
-document.getElementById("installBtn").onclick=async()=>{
-  if(!deferredPrompt)return;
-  deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt=null;
-  document.getElementById("installBtn").classList.add("hidden");
-};
-if("serviceWorker" in navigator) navigator.serviceWorker.register("service-worker.js");
-setInterval(updateCountdown,60000);
-render();
+document.querySelectorAll(".bottomnav button").forEach(b=>b.onclick=()=>{document.querySelectorAll(".bottomnav button").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));b.classList.add("active");$(b.dataset.view).classList.add("active");});
+$("markPublishedBtn").onclick=()=>{const v=series().videos.find(x=>x.status!=="published");if(!v)return alert("No quedan videos pendientes.");v.status="published";state.streak++;save();};
+$("quickIdeaBtn").onclick=()=>{const x=prompt("Escribe la idea:");if(!x)return;series().videos.push({id:crypto.randomUUID(),title:x,status:"idea",notes:"Idea rápida",order:series().videos.length+1});save();};
+$("addVideoBtn").onclick=()=>openVideo();
+$("videoForm").addEventListener("submit",()=>{const id=$("editingVideoId").value,title=$("videoTitleInput").value.trim(),s=series();if(!title)return;if(id){const v=s.videos.find(x=>x.id===id);v.title=title;v.status=$("videoStatusInput").value;v.notes=$("videoNotesInput").value.trim();}else s.videos.push({id:crypto.randomUUID(),title,status:$("videoStatusInput").value,notes:$("videoNotesInput").value.trim(),order:s.videos.length+1});save();});
+$("newSeriesBtn").onclick=()=>$("seriesDialog").showModal();
+$("seriesForm").addEventListener("submit",()=>{const name=$("seriesNameInput").value.trim();if(!name)return;const id=crypto.randomUUID();state.series.push({id,name,description:$("seriesDescriptionInput").value.trim(),videos:[]});state.activeSeriesId=id;save();});
+$("openSeriesBtn").onclick=()=>document.querySelector('[data-view="seriesView"]').click();$("settingsSeries").onclick=()=>document.querySelector('[data-view="seriesView"]').click();
+function openRoutine(){routineEditor();$("routineDialog").showModal();}$("editRoutineBtn").onclick=openRoutine;$("settingsRoutine").onclick=openRoutine;
+$("addRoutineItemBtn").onclick=()=>{const e=$("routineEditor"),r=document.createElement("div");r.className="routine";r.dataset.id=crypto.randomUUID();r.innerHTML=`<select class="day">${["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"].map((d,k)=>`<option value="${k}">${d}</option>`).join("")}</select><input class="hour" type="number" value="19"><input class="minute" type="number" value="0"><input class="title wide" value="Publicar episodio"><button type="button" class="secondary remove">Eliminar</button>`;r.querySelector(".remove").onclick=()=>r.remove();e.appendChild(r);};
+$("routineForm").addEventListener("submit",()=>{collectRoutine();save();});
+$("filterSelect").onchange=renderVideos;$("exportCalendarBtn").onclick=()=>downloadICS(schedule(12));
+$("notifyBtn").onclick=async()=>{if(!("Notification" in window))return alert("Este navegador no permite notificaciones.");state.notifications=await Notification.requestPermission()==="granted";save();};
+$("backupBtn").onclick=()=>{const b=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="manuelito-studio-respaldo.json";a.click();URL.revokeObjectURL(u);};
+$("restoreInput").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{state=migrate(JSON.parse(r.result));save();alert("Respaldo restaurado.");}catch{alert("Archivo inválido.");}};r.readAsText(f);};
+let deferredPrompt;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;$("installBtn").classList.remove("hidden");});$("installBtn").onclick=async()=>{if(!deferredPrompt)return;deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;};
+if("serviceWorker" in navigator)navigator.serviceWorker.register("service-worker.js");
+setInterval(countdown,60000);render();
