@@ -178,3 +178,16 @@ function setupRecoveryPanel(){
 
 if("serviceWorker" in navigator)navigator.serviceWorker.register("service-worker.js");
 setupRecoveryPanel();setInterval(countdown,60000);render();
+
+function closeSplash(){
+  const splash=document.getElementById("splashScreen");
+  if(!splash)return;
+  splash.classList.add("hide");
+  setTimeout(()=>splash.remove(),450);
+}
+const splashStarted=performance.now();
+window.addEventListener("load",()=>{
+  const elapsed=performance.now()-splashStarted;
+  setTimeout(closeSplash,Math.max(0,2000-elapsed));
+});
+setTimeout(closeSplash,2600);
