@@ -1,6 +1,6 @@
 {
   "name": "Manuelito Studio",
-  "short_name": "M Studio",
+  "short_name": "Manuelito",
   "description": "Centro de contenido del canal de Manuelito",
   "start_url": "./",
   "display": "standalone",

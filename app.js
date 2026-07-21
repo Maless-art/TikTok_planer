@@ -1,10 +1,90 @@
-const STORAGE_KEY="manuelito-content-v2"; // Misma clave de V2: conserva los cambios del celular
+
+const TARGET_STORAGE_KEY = "manuelito-content-v2";
+const KNOWN_STORAGE_KEYS = [
+  "manuelito-content-v1",
+  "manuelito-content-v2",
+  "manuelito-studio-v1",
+  "manuelito-studio",
+  "maless-studio",
+  "maless-content-v1",
+  "maless-content-v2"
+];
+
+function parseCandidate(key, raw) {
+  try {
+    const data = JSON.parse(raw);
+    if (!data || typeof data !== "object") return null;
+
+    const series = Array.isArray(data.series) ? data.series : [];
+    const videos = series.reduce((n, s) => n + (Array.isArray(s.videos) ? s.videos.length : 0), 0);
+    const routine = Array.isArray(data.routine) ? data.routine.length : 0;
+
+    // Recognize likely app data, while avoiding unrelated localStorage JSON.
+    if (!series.length && !videos && !routine && data.streak === undefined) return null;
+
+    return {
+      key,
+      raw,
+      data,
+      seriesCount: series.length,
+      videoCount: videos,
+      routineCount: routine,
+      score: videos * 100 + series.length * 10 + routine
+    };
+  } catch {
+    return null;
+  }
+}
+
+function inspectAllStorage() {
+  const candidates = [];
+  const seen = new Set();
+
+  for (const key of KNOWN_STORAGE_KEYS) {
+    const raw = localStorage.getItem(key);
+    if (raw !== null) {
+      const c = parseCandidate(key, raw);
+      if (c) candidates.push(c);
+      seen.add(key);
+    }
+  }
+
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || seen.has(key)) continue;
+    const raw = localStorage.getItem(key);
+    const c = parseCandidate(key, raw);
+    if (c) candidates.push(c);
+  }
+
+  return candidates.sort((a, b) => b.score - a.score);
+}
+
+const STORAGE_CANDIDATES = inspectAllStorage();
+const TARGET_CANDIDATE = STORAGE_CANDIDATES.find(c => c.key === TARGET_STORAGE_KEY) || null;
+const BEST_CANDIDATE = STORAGE_CANDIDATES[0] || null;
+let PENDING_RECOVERY = null;
+
+// Prefer richer historical data in memory, but never write automatically.
+if (BEST_CANDIDATE && (!TARGET_CANDIDATE || BEST_CANDIDATE.score > TARGET_CANDIDATE.score)) {
+  PENDING_RECOVERY = BEST_CANDIDATE;
+}
+
+const STORAGE_KEY=TARGET_STORAGE_KEY;
 const VERSION=3;
 const labels={idea:"Idea",recorded:"Grabado",edited:"Editado",ready:"Listo",published:"Publicado"};
 
 function defaultState(){const id=crypto.randomUUID();return{schemaVersion:VERSION,activeSeriesId:id,series:[{id,name:"1 año en la vida de Manuelito",description:"Un recorrido por los momentos más importantes del año en que el canal estuvo ausente.",videos:[]}],routine:[],streak:0,notifications:false};}
 function migrate(s){if(!s||typeof s!=="object")return defaultState();s.schemaVersion=VERSION;s.series=Array.isArray(s.series)?s.series:defaultState().series;s.routine=Array.isArray(s.routine)?s.routine:[];s.streak=Number(s.streak||0);s.series.forEach(x=>{x.videos=Array.isArray(x.videos)?x.videos:[];x.videos.forEach((v,i)=>{v.id=v.id||crypto.randomUUID();v.title=v.title||`Video ${i+1}`;v.status=v.status||"idea";v.notes=v.notes||"";v.order=Number(v.order||i+1);});});s.activeSeriesId=s.activeSeriesId||s.series[0]?.id;return s;}
-function load(){try{const x=localStorage.getItem(STORAGE_KEY);return x?migrate(JSON.parse(x)):defaultState();}catch{return defaultState();}}
+function load(){
+  try{
+    if(PENDING_RECOVERY) return migrate(structuredClone(PENDING_RECOVERY.data));
+    const x=localStorage.getItem(STORAGE_KEY);
+    return x?migrate(JSON.parse(x)):defaultState();
+  }catch{
+    return defaultState();
+  }
+}
 let state=load();
 const $=id=>document.getElementById(id);
 function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));render();}
@@ -52,5 +132,49 @@ $("notifyBtn").onclick=async()=>{if(!("Notification" in window))return alert("Es
 $("backupBtn").onclick=()=>{const b=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="manuelito-studio-respaldo.json";a.click();URL.revokeObjectURL(u);};
 $("restoreInput").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{state=migrate(JSON.parse(r.result));save();alert("Respaldo restaurado.");}catch{alert("Archivo inválido.");}};r.readAsText(f);};
 let deferredPrompt;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;$("installBtn").classList.remove("hidden");});$("installBtn").onclick=async()=>{if(!deferredPrompt)return;deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;};
+
+function setupRecoveryPanel(){
+  const panel=document.getElementById("recoveryPanel");
+  const msg=document.getElementById("recoveryMessage");
+  const restoreBtn=document.getElementById("restoreCandidateBtn");
+  const downloadBtn=document.getElementById("downloadAllStorageBtn");
+
+  if(PENDING_RECOVERY){
+    panel.classList.remove("hidden");
+    msg.textContent=`Encontré ${PENDING_RECOVERY.videoCount} videos y ${PENDING_RECOVERY.seriesCount} series en “${PENDING_RECOVERY.key}”. La app los muestra temporalmente, pero todavía no los ha sobrescrito ni movido.`;
+    restoreBtn.onclick=()=>{
+      const emergency={
+        exportedAt:new Date().toISOString(),
+        origin:location.origin,
+        storage:Object.fromEntries(Array.from({length:localStorage.length},(_,i)=>{
+          const k=localStorage.key(i); return [k,localStorage.getItem(k)];
+        }))
+      };
+      const backupBlob=new Blob([JSON.stringify(emergency,null,2)],{type:"application/json"});
+      const backupUrl=URL.createObjectURL(backupBlob);
+      const a=document.createElement("a");
+      a.href=backupUrl;a.download="respaldo-antes-de-recuperar.json";a.click();
+      URL.revokeObjectURL(backupUrl);
+
+      localStorage.setItem(TARGET_STORAGE_KEY,JSON.stringify(migrate(structuredClone(PENDING_RECOVERY.data))));
+      alert("Información recuperada y respaldo de seguridad descargado.");
+      location.reload();
+    };
+  }
+
+  downloadBtn.onclick=()=>{
+    const all={exportedAt:new Date().toISOString(),origin:location.origin,storage:{}};
+    for(let i=0;i<localStorage.length;i++){
+      const k=localStorage.key(i);
+      all.storage[k]=localStorage.getItem(k);
+    }
+    const blob=new Blob([JSON.stringify(all,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;a.download="localstorage-completo-manuelito.json";a.click();
+    URL.revokeObjectURL(url);
+  };
+}
+
 if("serviceWorker" in navigator)navigator.serviceWorker.register("service-worker.js");
-setInterval(countdown,60000);render();
+setupRecoveryPanel();setInterval(countdown,60000);render();

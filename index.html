@@ -4,13 +4,25 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="manifest.json"><link rel="stylesheet" href="styles.css">
-<title>Maless Studio</title>
+<title>Manuelito Studio</title>
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><div class="mark">M</div><div><small>@elbebe.manu</small><h1>Maless Studio</h1></div></div>
+  <div class="brand"><div class="mark">M</div><div><small>CONTENT STUDIO</small><h1>Manuelito Studio</h1></div></div>
   <button id="installBtn" class="ghost hidden">Instalar</button>
 </header>
+
+<section id="recoveryPanel" class="recovery-panel hidden">
+  <div>
+    <strong>Se encontró información anterior</strong>
+    <p id="recoveryMessage">No se ha sobrescrito nada. Revisa y recupera tus datos.</p>
+  </div>
+  <div class="recovery-actions">
+    <button id="restoreCandidateBtn">Recuperar información</button>
+    <button id="downloadAllStorageBtn" class="secondary">Descargar respaldo completo</button>
+  </div>
+</section>
+
 
 <main>
 <section id="homeView" class="view active">
