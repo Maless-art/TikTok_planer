@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#2563eb" />
+  <meta name="description" content="Agenda de contenido para el canal de Manuelito" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+  <title>Manuelito Content</title>
+</head>
+<body>
+  <header class="hero">
+    <div>
+      <span class="eyebrow">AGENDA DE CONTENIDO</span>
+      <h1>Manuelito Content</h1>
+      <p>Organiza cada serie, mantén el ritmo y no pierdas ninguna publicación.</p>
+    </div>
+    <button id="installBtn" class="ghost hidden">Instalar app</button>
+  </header>
+
+  <main>
+    <section class="card next-card">
+      <div class="section-title">
+        <div>
+          <span class="label">PRÓXIMA PUBLICACIÓN</span>
+          <h2 id="nextTitle">Cargando...</h2>
+        </div>
+        <span id="nextStatus" class="pill pending">Pendiente</span>
+      </div>
+      <p id="nextDate" class="big-date"></p>
+      <p id="countdown" class="countdown"></p>
+      <div class="actions">
+        <button id="markPublishedBtn">Marcar como publicado</button>
+        <button id="notifyBtn" class="secondary">Activar avisos</button>
+      </div>
+    </section>
+
+    <section class="stats-grid">
+      <article class="mini-card">
+        <span>Videos disponibles</span>
+        <strong id="availableCount">0</strong>
+      </article>
+      <article class="mini-card">
+        <span>Pendientes</span>
+        <strong id="pendingCount">0</strong>
+      </article>
+      <article class="mini-card">
+        <span>Publicados</span>
+        <strong id="publishedCount">0</strong>
+      </article>
+      <article class="mini-card">
+        <span>Racha</span>
+        <strong><span id="streakCount">0</span> 🔥</strong>
+      </article>
+    </section>
+
+    <section class="card">
+      <div class="section-title">
+        <div>
+          <span class="label">SERIE ACTUAL</span>
+          <h2 id="currentSeriesName">1 año en la vida de Manuelito</h2>
+        </div>
+        <button id="seriesMenuBtn" class="secondary small">Administrar series</button>
+      </div>
+      <p id="seriesDescription" class="muted"></p>
+      <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
+      <p id="progressText" class="muted"></p>
+      <div id="seriesCompleteActions" class="actions hidden">
+        <button id="newSeriesBtn">Crear nueva serie</button>
+        <button id="viewHistoryBtn" class="secondary">Ver historial</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-title">
+        <div>
+          <span class="label">RUTINA SEMANAL</span>
+          <h2>Próximas cuatro tareas</h2>
+        </div>
+        <button id="editRoutineBtn" class="secondary small">Editar rutina</button>
+      </div>
+      <p class="muted">La lista se mueve automáticamente y siempre muestra las cuatro tareas futuras más cercanas.</p>
+      <div id="scheduleList" class="schedule-list"></div>
+      <div class="actions">
+        <button id="exportCalendarBtn" class="secondary">Exportar calendario</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-title">
+        <div>
+          <span class="label">BANCO DE VIDEOS</span>
+          <h2>Contenido de la serie</h2>
+        </div>
+        <button id="addVideoBtn" class="secondary small">+ Agregar video</button>
+      </div>
+      <div class="toolbar">
+        <select id="filterSelect" aria-label="Filtrar videos">
+          <option value="all">Todos</option>
+          <option value="pending">Pendientes</option>
+          <option value="ready">Listos</option>
+          <option value="published">Publicados</option>
+        </select>
+      </div>
+      <div id="videoList" class="video-list"></div>
+    </section>
+  </main>
+
+  <dialog id="videoDialog">
+    <form method="dialog" id="videoForm">
+      <h2 id="videoDialogTitle">Agregar video</h2>
+      <input type="hidden" id="editingVideoId" />
+      <label>Título
+        <input id="videoTitleInput" required placeholder="Ej. Manuelito aprendiendo colores" />
+      </label>
+      <label>Estado
+        <select id="videoStatusInput">
+          <option value="idea">Idea</option>
+          <option value="recorded">Grabado</option>
+          <option value="edited">Editado</option>
+          <option value="ready">Listo</option>
+          <option value="published">Publicado</option>
+        </select>
+      </label>
+      <label>Notas
+        <textarea id="videoNotesInput" rows="4" placeholder="Fecha aproximada, qué ocurre en el video, texto para la publicación..."></textarea>
+      </label>
+      <div class="dialog-actions">
+        <button value="cancel" class="secondary">Cancelar</button>
+        <button id="saveVideoBtn" value="default">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="seriesDialog">
+    <form method="dialog" id="seriesForm">
+      <h2>Administrar series</h2>
+      <div id="seriesList" class="series-list"></div>
+      <hr />
+      <h3>Crear nueva serie</h3>
+      <label>Nombre
+        <input id="seriesNameInput" placeholder="Ej. Manuelito bilingüe" />
+      </label>
+      <label>Descripción
+        <textarea id="seriesDescriptionInput" rows="3" placeholder="Objetivo o enfoque de esta serie"></textarea>
+      </label>
+      <div class="dialog-actions">
+        <button value="cancel" class="secondary">Cerrar</button>
+        <button id="createSeriesBtn" value="default">Crear serie</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="routineDialog">
+    <form method="dialog" id="routineForm">
+      <h2>Editar rutina</h2>
+      <div id="routineEditor"></div>
+      <button id="addRoutineItemBtn" type="button" class="secondary full">+ Agregar tarea semanal</button>
+      <div class="dialog-actions">
+        <button value="cancel" class="secondary">Cancelar</button>
+        <button id="saveRoutineBtn" value="default">Guardar rutina</button>
+      </div>
+    </form>
+  </dialog>
+
+  <footer>Hecho para mantener viva la historia de Manuelito 💙</footer>
+  <script src="app.js"></script>
+</body>
+</html>
